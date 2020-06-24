@@ -1,0 +1,319 @@
+#!/usr/bin/env python3
+
+import os
+from ctypes import CDLL
+from time import sleep, monotonic, process_time
+from sys import stdout, exit
+from signal import signal, SIGKILL, SIGTERM, SIGINT, SIGQUIT, SIGHUP
+
+
+###############################################################################
+
+# CONFIG
+
+keep_mem_available_percent = 3
+factor = 0.8
+min_common_memory_max = 25
+
+# cg_list = ['user.slice', 'system.slice']
+
+min_swap_free_kb = 204800  # 200M
+# установить как двойной процент. но не ниже 100м, как вар.
+
+max_delta_kb = 10240
+exit_sec = 15
+min_sleep = 0.5
+max_sleep = 3
+mem_fill_rate = 4000
+
+low_swap_interval = 5
+no_swap_interval = 10
+
+correction_interval = 0.5
+keep_interval = 0.5
+
+if min_sleep == max_sleep:
+    stable_sleep = True
+else:
+    stable_sleep = False
+
+
+###############################################################################
+
+# FN
+
+def mlockall():
+    """
+    """
+    MCL_CURRENT = 1
+    MCL_FUTURE = 2
+    MCL_ONFAULT = 4
+
+    libc = CDLL('libc.so.6', use_errno=True)
+    result = libc.mlockall(MCL_CURRENT | MCL_FUTURE | MCL_ONFAULT)
+
+    if result != 0:
+        result = libc.mlockall(MCL_CURRENT | MCL_FUTURE)
+        if result != 0:
+            print('WARNING: cannot lock all memory: [Errno {}]'.format(result))
+        else:
+            print('All memory locked with MCL_CURRENT | MCL_FUTURE')
+    else:
+        print('All memory locked with MCL_CURRENT | MCL_FUTURE | MCL_ONFAULT')
+
+
+def rline(path):
+    """
+    """
+    with open(path, 'rb', buffering=0) as f:
+        try:
+            return int(f.read())
+        except ValueError:
+            return 0
+
+
+def check_mem_and_swap():
+    """
+    """
+    fd['mi'].seek(0)
+
+    m_list = fd['mi'].read().decode().split(' kB\n')
+
+    ma = int(m_list[mem_available_index].split(':')[1])
+    st = int(m_list[swap_total_index].split(':')[1])
+    sf = int(m_list[swap_free_index].split(':')[1])
+
+    return ma, st, sf
+
+
+def write(path, string):
+    """
+    """
+    with open(path, 'w') as f:
+        f.write(string)
+
+
+def percent(num):
+    """Interprete num as percentage."""
+    return round(num * 100, 1)
+
+
+def sleep_after_check_mem():
+    """
+    """
+    if stable_sleep:
+        print('Sleep', min_sleep)
+        sleep(min_sleep)
+        return None
+
+    t = ma / (mem_fill_rate * 1024)
+
+    if t > max_sleep:
+        t = max_sleep
+    elif t < min_sleep:
+        t = min_sleep
+    else:
+        pass
+
+    sleep(t)
+
+
+def signal_handler(signum, frame):
+    """
+    """
+    def signal_handler_inner(signum, frame):
+        """
+        """
+        pass
+
+    for i in sig_list:
+        signal(i, signal_handler_inner)
+
+    write(use_mem_max_path, 'max\n')
+    write(sys_mem_max_path, 'max\n')
+
+    if len(fd) > 0:
+        for f in fd:
+            fd[f].close()
+
+    print('Signal handler called with the {} signal '.format(
+        sig_dict[signum]))
+
+    m1 = monotonic()
+    pt1 = process_time()
+    x = (pt1 - pt0) / (m1 - m0) * 100
+
+    print('CPU usage by memavaild since it started: {}%'.format(round(x, 3)))
+    print('Exit')
+    exit()
+
+
+def correction():
+    """
+    """
+
+    x = monotonic()
+
+    while True:
+        stdout.flush()
+        print('---------------------------------')
+        ma, st, sf = check_mem_and_swap()
+        print('MemAvailable, %:', percent(ma / mem_total))
+
+        if st == 0:
+            print('SwapTotal=0, do nothing')
+            sleep(no_swap_interval)
+            continue
+
+        if sf < min_swap_free_kb:
+            print('swap_free < min_swap_free, do nothing')
+            sleep(low_swap_interval)
+            continue
+
+        if ma < keep_mem_available_min_kb:
+            x = monotonic()
+
+            use_mem_cur = rline(use_mem_cur_path)
+            sys_mem_cur = rline(sys_mem_cur_path)
+            print(
+                'current, % [user.slice: {} | system.slice: {} | comm'
+                'on: {}]'.format(
+                    percent(
+                        use_mem_cur / mt_b),
+                    percent(
+                        sys_mem_cur / mt_b),
+                    percent(
+                        (use_mem_cur + sys_mem_cur) / mt_b)))
+
+            if use_mem_cur + sys_mem_cur <= min_common_memory_max_b:
+
+                write(use_mem_max_path, '{}\n'.format(default_memory_max_b))
+                write(sys_mem_max_path, '{}\n'.format(default_memory_max_b))
+                return None
+
+            delta = keep_mid_kb - ma
+
+            if delta > max_delta_kb:
+                delta = max_delta_kb
+
+            if use_mem_cur > sys_mem_cur:
+                w_path = use_mem_max_path
+                mc = use_mem_cur
+                print('set limit for user')
+            else:
+                w_path = sys_mem_max_path
+                mc = sys_mem_cur
+                print('set limit for system')
+
+            mm_new = mc - delta * 1024
+
+            print('new memory.max:', percent(mm_new / mt_b))
+
+            write(w_path, '{}\n'.format(int(mm_new)))
+
+            sleep(correction_interval)
+
+        elif ma < keep_mem_available_max_kb:
+            x = monotonic()
+            sleep(keep_interval)
+
+        else:
+
+            if monotonic() - x > exit_sec:
+                write(use_mem_max_path, '{}\n'.format(default_memory_max_b))
+                write(sys_mem_max_path, '{}\n'.format(default_memory_max_b))
+
+                break
+
+            sleep_after_check_mem()
+
+
+###############################################################################
+
+
+with open('/proc/meminfo') as f:
+    mem_list = f.readlines()
+mem_list_names = []
+for s in mem_list:
+    mem_list_names.append(s.split(':')[0])
+try:
+    mem_available_index = mem_list_names.index('MemAvailable')
+except ValueError:
+    print('ERROR: your Linux kernel is too old, Linux 3.14+ required')
+swap_total_index = mem_list_names.index('SwapTotal')
+swap_free_index = mem_list_names.index('SwapFree')
+mem_total = mt = int(mem_list[0].split(':')[1][:-4])
+mt_b = mt * 1024
+
+
+mlockall()
+
+
+use_mem_max_path = '/sys/fs/cgroup/user.slice/memory.max'
+use_mem_cur_path = '/sys/fs/cgroup/user.slice/memory.current'
+
+sys_mem_max_path = '/sys/fs/cgroup/system.slice/memory.max'
+sys_mem_cur_path = '/sys/fs/cgroup/system.slice/memory.current'
+
+
+if not os.path.exists(use_mem_max_path):
+    print('ERROR: {} does not exist'.format(use_mem_max_path))
+    exit(1)
+
+if not os.path.exists(sys_mem_cur_path):
+    print('ERROR: {} does not exist'.format(sys_mem_cur_path))
+    exit(1)
+
+
+keep_mem_available_max_kb = mem_total / 100 * keep_mem_available_percent
+keep_mem_available_min_kb = keep_mem_available_max_kb * factor
+
+keep_mid_kb = (keep_mem_available_max_kb + keep_mem_available_min_kb) / 2
+
+min_common_memory_max_b = mem_total / 100 * min_common_memory_max * 1024
+
+default_memory_max_b = mt * (100 - keep_mem_available_percent) * 1024
+
+
+print('keep_mem_available_max: {}'.format(
+    round(keep_mem_available_percent, 1)))
+
+try:
+    write(use_mem_max_path, '{}\n'.format(default_memory_max_b))
+    write(sys_mem_max_path, '{}\n'.format(default_memory_max_b))
+except Exception as e:
+    print(e)
+    exit(1)
+
+
+fd = dict()
+fd['mi'] = open('/proc/meminfo', 'rb', buffering=0)
+
+
+m0 = monotonic()
+pt0 = process_time()
+
+
+sig_dict = {
+    SIGKILL: 'SIGKILL',
+    SIGINT: 'SIGINT',
+    SIGQUIT: 'SIGQUIT',
+    SIGHUP: 'SIGHUP',
+    SIGTERM: 'SIGTERM'
+}
+
+
+sig_list = [SIGTERM, SIGINT, SIGQUIT, SIGHUP]
+
+
+for i in sig_list:
+    signal(i, signal_handler)
+
+#############################################################
+
+while True:
+    ma, st, sf = check_mem_and_swap()
+    if ma < keep_mid_kb:
+        correction()
+    stdout.flush()
+    sleep_after_check_mem()
