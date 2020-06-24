@@ -1,23 +1,27 @@
 [Unit]
-Description=memavaild
+Description=Keep amount of available memory
+Documentation=https://github.com/hakavlad/memavaild
 
 [Service]
 ExecStart=:TARGET_SBINDIR:/memavaild
 Restart=always
 RestartSec=0
-RestrictRealtime=yes
+User=nobody
+AmbientCapabilities=CAP_IPC_LOCK CAP_DAC_OVERRIDE
 TasksMax=1
-MemoryMax=20M
+MemoryMax=25M
 MemorySwapMax=1M
-ProtectSystem=strict
 ProtectHome=true
+ProtectSystem=strict
+MemoryDenyWriteExecute=yes
 ProtectKernelTunables=true
 ProtectKernelModules=true
-PrivateDevices=true
-MemoryDenyWriteExecute=yes
 RestrictNamespaces=yes
+RestrictRealtime=yes
+PrivateDevices=true
 LockPersonality=yes
 PrivateNetwork=true
+NoNewPriveleges=yes
 
 [Install]
 WantedBy=multi-user.target
