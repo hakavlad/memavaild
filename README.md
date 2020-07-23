@@ -17,6 +17,13 @@ Improve responsiveness during intense swapping: keep amount of available memory.
 - The ZFS ARC cache is memory-reclaimable, like the Linux buffer cache. However, in contrast to the buffer cache, it currently does not count to MemAvailable (see openzfs/zfs#10255).
 
 ## Install
+
+#### On rmp-based:
+
+See https://copr.fedorainfracloud.org/coprs/elxreno/memavaild/
+
+#### On other distros:
+
 ```
 $ git clone https://github.com/hakavlad/memavaild.git && cd memavaild
 $ sudo make install
