@@ -12,35 +12,35 @@ from signal import signal, SIGKILL, SIGTERM, SIGINT, SIGQUIT, SIGHUP
 # CONFIG
 
 keep_mem_available_percent = 3
+
 factor = 0.8
+
 min_common_memory_max = 25
 
-# cg_list = ['user.slice', 'system.slice']
+min_swap_free_kb = 1024 * 200
 
-min_swap_free_kb = 204800  # 200M
-# установить как двойной процент. но не ниже 100м, как вар.
+max_delta_kb = 1024 * 10
 
-max_delta_kb = 10240
 exit_sec = 15
+
 min_sleep = 0.5
+
 max_sleep = 3
+
 mem_fill_rate = 4000
 
 low_swap_interval = 5
+
 no_swap_interval = 10
 
 correction_interval = 0.5
+
 keep_interval = 0.5
 
-if min_sleep == max_sleep:
-    stable_sleep = True
-else:
-    stable_sleep = False
-
+debug = False
 
 ###############################################################################
 
-# FN
 
 def mlockall():
     """
@@ -55,11 +55,16 @@ def mlockall():
     if result != 0:
         result = libc.mlockall(MCL_CURRENT | MCL_FUTURE)
         if result != 0:
-            print('WARNING: cannot lock all memory: [Errno {}]'.format(result))
+            print('ERROR: cannot lock process memory: [Errno {}]'.format(
+                result))
+            exit(1)
         else:
-            print('All memory locked with MCL_CURRENT | MCL_FUTURE')
+            if debug:
+                print('Process memory locked with MCL_CURRENT | MCL_FUTURE')
     else:
-        print('All memory locked with MCL_CURRENT | MCL_FUTURE | MCL_ONFAULT')
+        if debug:
+            print('Process memory locked with MCL_CURRENT | MCL_FUTURE | MCL'
+                  '_ONFAULT')
 
 
 def rline(path):
@@ -102,7 +107,8 @@ def sleep_after_check_mem():
     """
     """
     if stable_sleep:
-        print('Sleep', min_sleep)
+        if debug:
+            print('Sleep', min_sleep)
         sleep(min_sleep)
         return None
 
@@ -143,8 +149,8 @@ def signal_handler(signum, frame):
     pt1 = process_time()
     x = (pt1 - pt0) / (m1 - m0) * 100
 
-    print('CPU usage by memavaild since it started: {}%'.format(round(x, 3)))
-    print('Exit')
+    print('CPU usage by the process since monitoring has started'
+          ': {}%; exit.'.format(round(x, 2)))
     exit()
 
 
@@ -152,21 +158,30 @@ def correction():
     """
     """
 
+    if debug:
+        print('Enter in correction')
+
     x = monotonic()
 
     while True:
         stdout.flush()
-        print('---------------------------------')
+
         ma, st, sf = check_mem_and_swap()
-        print('MemAvailable, %:', percent(ma / mem_total))
+
+        if debug:
+            print('MemAvailable, %:', percent(ma / mem_total))
 
         if st == 0:
-            print('SwapTotal=0, do nothing')
+
+            if debug:
+                print('SwapTotal=0, do nothing')
             sleep(no_swap_interval)
             continue
 
         if sf < min_swap_free_kb:
-            print('swap_free < min_swap_free, do nothing')
+            if debug:
+                print('swap_free < min_swap_free, do nothing; sleep'
+                      'ing {}s'.format(low_swap_interval))
             sleep(low_swap_interval)
             continue
 
@@ -175,15 +190,17 @@ def correction():
 
             use_mem_cur = rline(use_mem_cur_path)
             sys_mem_cur = rline(sys_mem_cur_path)
-            print(
-                'current, % [user.slice: {} | system.slice: {} | comm'
-                'on: {}]'.format(
-                    percent(
-                        use_mem_cur / mt_b),
-                    percent(
-                        sys_mem_cur / mt_b),
-                    percent(
-                        (use_mem_cur + sys_mem_cur) / mt_b)))
+
+            if debug:
+                print(
+                    'current, % [user.slice: {} | system.slice: {} | comm'
+                    'on: {}]'.format(
+                        percent(
+                            use_mem_cur / mt_b),
+                        percent(
+                            sys_mem_cur / mt_b),
+                        percent(
+                            (use_mem_cur + sys_mem_cur) / mt_b)))
 
             if use_mem_cur + sys_mem_cur <= min_common_memory_max_b:
 
@@ -199,15 +216,18 @@ def correction():
             if use_mem_cur > sys_mem_cur:
                 w_path = use_mem_max_path
                 mc = use_mem_cur
-                print('set limit for user')
+                if debug:
+                    print('set limit for user.slice')
             else:
                 w_path = sys_mem_max_path
                 mc = sys_mem_cur
-                print('set limit for system')
+                if debug:
+                    print('set limit for system.slice')
 
             mm_new = mc - delta * 1024
 
-            print('new memory.max:', percent(mm_new / mt_b))
+            if debug:
+                print('new memory.max:', percent(mm_new / mt_b))
 
             write(w_path, '{}\n'.format(int(mm_new)))
 
@@ -223,12 +243,21 @@ def correction():
                 write(use_mem_max_path, '{}\n'.format(default_memory_max_b))
                 write(sys_mem_max_path, '{}\n'.format(default_memory_max_b))
 
+                if debug:
+                    print('Exit from correction')
+                    stdout.flush()
                 break
 
             sleep_after_check_mem()
 
 
 ###############################################################################
+
+
+if min_sleep == max_sleep:
+    stable_sleep = True
+else:
+    stable_sleep = False
 
 
 with open('/proc/meminfo') as f:
@@ -274,9 +303,10 @@ min_common_memory_max_b = mem_total / 100 * min_common_memory_max * 1024
 
 default_memory_max_b = mt * (100 - keep_mem_available_percent) * 1024
 
+if debug:
+    print('keep_mem_available_max: {}% MemTotal'.format(
+        round(keep_mem_available_percent, 1)))
 
-print('keep_mem_available_max: {}'.format(
-    round(keep_mem_available_percent, 1)))
 
 try:
     write(use_mem_max_path, '{}\n'.format(default_memory_max_b))
@@ -288,10 +318,6 @@ except Exception as e:
 
 fd = dict()
 fd['mi'] = open('/proc/meminfo', 'rb', buffering=0)
-
-
-m0 = monotonic()
-pt0 = process_time()
 
 
 sig_dict = {
@@ -309,7 +335,10 @@ sig_list = [SIGTERM, SIGINT, SIGQUIT, SIGHUP]
 for i in sig_list:
     signal(i, signal_handler)
 
-#############################################################
+m0 = monotonic()
+pt0 = process_time()
+
+print('Monitoring has started!')
 
 while True:
     ma, st, sf = check_mem_and_swap()
