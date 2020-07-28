@@ -303,10 +303,6 @@ min_common_memory_max_b = mem_total / 100 * min_common_memory_max * 1024
 
 default_memory_max_b = mt * (100 - keep_mem_available_percent) * 1024
 
-if debug:
-    print('keep_mem_available_max: {}% MemTotal'.format(
-        round(keep_mem_available_percent, 1)))
-
 
 try:
     write(use_mem_max_path, '{}\n'.format(default_memory_max_b))
