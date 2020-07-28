@@ -21,7 +21,7 @@ RestrictRealtime=yes
 PrivateDevices=true
 LockPersonality=yes
 PrivateNetwork=true
-NoNewPriveleges=yes
+NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target
