@@ -11,31 +11,33 @@ from signal import signal, SIGKILL, SIGTERM, SIGINT, SIGQUIT, SIGHUP
 
 # CONFIG
 
-keep_mem_available_percent = 3
 
-factor = 0.8
+keep_mem_available_percent_min = 2.5
+keep_mem_available_percent_mid = 2.9
+keep_mem_available_percent_max = 3.9
 
-min_common_memory_max = 25
 
-min_swap_free_kb = 1024 * 200
+min_common_memory_max = 10
 
-max_delta_kb = 1024 * 10
+min_swap_free_kb = 1024 * 20
+
+max_delta_kb = 1024 * 200
 
 exit_sec = 15
 
-min_sleep = 0.5
+min_sleep = 0.1
 
 max_sleep = 3
 
 mem_fill_rate = 4000
 
-low_swap_interval = 5
+low_swap_interval = 3
 
-no_swap_interval = 10
+no_swap_interval = 3
 
-correction_interval = 0.5
+correction_interval = 0.2
 
-keep_interval = 0.5
+keep_interval = 0.2
 
 debug = False
 
@@ -294,14 +296,13 @@ if not os.path.exists(sys_mem_cur_path):
     exit(1)
 
 
-keep_mem_available_max_kb = mem_total / 100 * keep_mem_available_percent
-keep_mem_available_min_kb = keep_mem_available_max_kb * factor
-
-keep_mid_kb = (keep_mem_available_max_kb + keep_mem_available_min_kb) / 2
-
-min_common_memory_max_b = mem_total / 100 * min_common_memory_max * 1024
-
-default_memory_max_b = mt * (100 - keep_mem_available_percent) * 1024
+keep_mem_available_max_kb = int(
+    mem_total / 100 * keep_mem_available_percent_max)
+keep_mem_available_min_kb = int(
+    mem_total / 100 * keep_mem_available_percent_min)
+keep_mid_kb = int(mem_total / 100 * keep_mem_available_percent_mid)
+min_common_memory_max_b = int(mem_total / 100 * min_common_memory_max * 1024)
+default_memory_max_b = int(mt * (100 - keep_mem_available_percent_max) * 1024)
 
 
 try:
@@ -338,7 +339,7 @@ print('Monitoring has started!')
 
 while True:
     ma, st, sf = check_mem_and_swap()
-    if ma < keep_mid_kb:
+    if ma < keep_mem_available_min_kb:
         correction()
     stdout.flush()
     sleep_after_check_mem()
