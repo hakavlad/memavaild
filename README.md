@@ -4,7 +4,7 @@
 [![Total alerts](https://img.shields.io/lgtm/alerts/g/hakavlad/memavaild.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/hakavlad/memavaild/alerts/)
 [![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/hakavlad/memavaild.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/hakavlad/memavaild/context:python)
 
-Improve responsiveness during intense swapping: keep amount of available memory.
+Improve responsiveness during heavy swapping: keep amount of available memory.
 
 ## Requirements
 
@@ -13,12 +13,12 @@ Improve responsiveness during intense swapping: keep amount of available memory.
 
 ## Known problems
 
-- Awful documentation.
-- The ZFS ARC cache is memory-reclaimable, like the Linux buffer cache. However, in contrast to the buffer cache, it currently does not count to MemAvailable (see openzfs/zfs#10255).
+- The documentation is terrible.
+- The ZFS ARC cache is memory-reclaimable, like the Linux buffer cache. However, in contrast to the buffer cache, it currently does not count to MemAvailable (see openzfs/zfs#10255). Don't use memavaild with ZFS.
 
 ## Install
 
-#### On rmp-based:
+#### On rpm-based:
 
 See https://copr.fedorainfracloud.org/coprs/elxreno/memavaild/
 
@@ -30,7 +30,7 @@ $ sudo make install
 $ sudo systemctl enable --now memavaild.service
 ```
 
-## Uninstall
+#### Uninstall
 ```
 $ sudo make uninstall
 ```
