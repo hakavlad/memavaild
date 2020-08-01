@@ -26,13 +26,17 @@ units:
 
 	rm -fv memavaild.service
 
+useradd:
+	-useradd -r -M -s /bin/false memavaild
+
 chcon:
 	-chcon -t systemd_unit_file_t $(DESTDIR)$(SYSTEMDUNITDIR)/memavaild.service
+	# Don't worry if you see "make: [chcon] Error 1", just ignore it.
 
 daemon-reload:
 	-systemctl daemon-reload
 
-install: base units chcon daemon-reload
+install: base units useradd chcon daemon-reload
 
 uninstall-base:
 	rm -fv $(DESTDIR)$(SBINDIR)/memavaild
