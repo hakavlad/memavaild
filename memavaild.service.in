@@ -1,26 +1,28 @@
 [Unit]
-Description=Keep amount of available memory
+Description=Improve responsiveness during heavy swapping: keep amount of available memory
 Documentation=https://github.com/hakavlad/memavaild
 
 [Service]
 ExecStart=:TARGET_SBINDIR:/memavaild
-Restart=always
-RestartSec=0
+Restart=on-failure
 User=memavaild
 AmbientCapabilities=CAP_IPC_LOCK CAP_DAC_OVERRIDE
 TasksMax=1
 MemoryMax=25M
-MemorySwapMax=1M
+MemorySwapMax=1
+PrivateTmp=true
 ProtectHome=true
+ProtectClock=true
 ProtectSystem=strict
-MemoryDenyWriteExecute=yes
-ProtectKernelTunables=true
+ProtectHostname=true
 ProtectKernelModules=true
+ProtectKernelTunables=true
+MemoryDenyWriteExecute=yes
 RestrictNamespaces=yes
 RestrictRealtime=yes
 PrivateDevices=true
-LockPersonality=yes
 PrivateNetwork=true
+LockPersonality=yes
 NoNewPrivileges=yes
 
 [Install]
