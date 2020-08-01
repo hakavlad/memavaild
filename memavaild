@@ -17,7 +17,7 @@ keep_mem_available_percent_mid = 2.9
 keep_mem_available_percent_max = 3.9
 
 
-min_common_memory_max = 10
+min_common_memory_max = 20
 
 min_swap_free_kb = 1024 * 20
 
