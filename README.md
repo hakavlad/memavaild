@@ -35,5 +35,9 @@ $ sudo systemctl enable --now memavaild.service
 $ sudo make uninstall
 ```
 
+## How to configure
+
+Edit the config: $SYSCONFDIR/memavaild.conf
+
 ## Demo
 `stress -m 9 --vm-bytes 99G` without full freezing (with swap on zram): https://www.youtube.com/watch?v=DJq00pEt4xg
