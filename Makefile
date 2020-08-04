@@ -57,6 +57,7 @@ install: base units useradd chcon daemon-reload
 uninstall-base:
 	rm -fv $(DESTDIR)$(SBINDIR)/memavaild
 	rm -fvr $(DESTDIR)$(DOCDIR)/
+	rm -fv $(DESTDIR)$(SYSCONFDIR)/memavaild.conf
 
 uninstall-units:
 	# 'make uninstall-units' must not fail with error if systemctl is unavailable or returns error
