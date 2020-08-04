@@ -1,6 +1,9 @@
 DESTDIR ?=
 PREFIX ?=         /usr/local
+SYSCONFDIR ?=     /usr/local/etc
 SYSTEMDUNITDIR ?= /usr/local/lib/systemd/system
+
+
 
 SBINDIR ?= $(PREFIX)/sbin
 DATADIR ?= $(PREFIX)/share
@@ -15,6 +18,19 @@ base:
 
 	install -d $(DESTDIR)$(DOCDIR)
 	install -m0644 README.md $(DESTDIR)$(DOCDIR)/README.md
+
+	install -d $(DESTDIR)$(SYSCONFDIR)
+
+	sed "s|:TARGET_DATADIR:|$(DATADIR)|" \
+		memavaild.conf.in > memavaild.conf
+
+	install -m0644 memavaild.conf $(DESTDIR)$(SYSCONFDIR)/memavaild.conf
+
+	install -d $(DESTDIR)$(DATADIR)/memavaild
+
+	install -m0644 memavaild.conf $(DESTDIR)$(DATADIR)/memavaild/memavaild.conf
+
+	rm -fv memavaild.conf
 
 units:
 	install -d $(DESTDIR)$(SYSTEMDUNITDIR)

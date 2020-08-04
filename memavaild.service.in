@@ -3,7 +3,7 @@ Description=Improve responsiveness during heavy swapping: keep amount of availab
 Documentation=https://github.com/hakavlad/memavaild
 
 [Service]
-ExecStart=:TARGET_SBINDIR:/memavaild
+ExecStart=:TARGET_SBINDIR:/memavaild -c :TARGET_SYSCONFDIR:/memavaild.conf
 Restart=on-failure
 User=memavaild
 AmbientCapabilities=CAP_IPC_LOCK CAP_DAC_OVERRIDE
