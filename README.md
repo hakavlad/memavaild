@@ -10,7 +10,7 @@ Improve responsiveness during heavy swapping: keep amount of available memory.
 
 — [Benjamin Berg](https://lists.fedoraproject.org/archives/list/devel@lists.fedoraproject.org/message/3VNHWVRSGPYCFC6LUCNGUBUPSLZJT7OE/)
 
-`memavaild` is yet another tool to improve responsiveness during heavy swapping. How it works: slices are swapped out when `MemAvailable` is low by reducing `memory.max` (values change dynamically). Effects: performance increases in tasks that requires heavy swapping, especially in io-bound tasks. At the same time, tasks are performed at less io and memory pressure. Using `memavaild` has no effect without swap space.
+`memavaild` is yet another tool to improve responsiveness during heavy swapping. How it works: slices are swapped out when `MemAvailable` is low by reducing `memory.max` (values change dynamically). Effects: performance increases in tasks that requires heavy swapping, especially in io-bound tasks. At the same time, tasks are performed at less io and memory pressure. `memavaild` tries to keep about 3% available memory by default. Using `memavaild` has no effect without swap space.
 
 ## Requirements
 
@@ -19,7 +19,7 @@ Improve responsiveness during heavy swapping: keep amount of available memory.
 
 ## How to enable unified cgroup hierarchy
 
-Unified cgroup hierarchy is enabled by default in Fedora 32+. On other distros pass `systemd.unified_cgroup_hierarchy=1` in kernel boot cmdline.
+Unified cgroup hierarchy is enabled by default on Fedora 32+. On other distros pass `systemd.unified_cgroup_hierarchy=1` in kernel boot cmdline.
 
 ## Known problems
 
