@@ -51,4 +51,5 @@ Edit the config: `$SYSCONFDIR/memavaild.conf` (`/etc/memavaild.conf` or `/usr/lo
 
 ## Demo
 
-`stress -m 9 --vm-bytes 99G` without full freezing (with swap on zram): https://www.youtube.com/watch?v=DJq00pEt4xg
+- `stress -m 9 --vm-bytes 99G` without full freezing (with swap on zram): https://www.youtube.com/watch?v=DJq00pEt4xg
+- `stress -m 8 --vm-bytes 32G` with no freeze: `prelockd` + `memavaild` + `nohang-desktop` + `zram`: https://www.youtube.com/watch?v=veY606v57Hk
