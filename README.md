@@ -10,7 +10,7 @@ Improve responsiveness during heavy swapping: keep amount of available memory.
 
 — [Benjamin Berg](https://lists.fedoraproject.org/archives/list/devel@lists.fedoraproject.org/message/3VNHWVRSGPYCFC6LUCNGUBUPSLZJT7OE/)
 
-`memavaild` is yet another tool to improve responsiveness during heavy swapping. How it works: slices are swapped out when `MemAvailable` is low by reducing `memory.max` (values change dynamically). Effects: performance increases in tasks that requires heavy swapping, especially in io-bound tasks. At the same time, tasks are performed at less io and memory pressure.
+`memavaild` is yet another tool to improve responsiveness during heavy swapping. How it works: slices are swapped out when `MemAvailable` is low by reducing `memory.max` (values change dynamically). Effects: performance increases in tasks that requires heavy swapping, especially in io-bound tasks. At the same time, tasks are performed at less io and memory pressure. Using `memavaild` has no effect without swap space.
 
 ## Requirements
 
