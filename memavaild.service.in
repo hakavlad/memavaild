@@ -6,7 +6,7 @@ Documentation=https://github.com/hakavlad/memavaild
 ExecStart=:TARGET_SBINDIR:/memavaild -c :TARGET_SYSCONFDIR:/memavaild.conf
 Restart=on-failure
 User=memavaild
-Slice=critical.slice
+Slice=hostcritical.slice
 AmbientCapabilities=CAP_IPC_LOCK CAP_DAC_OVERRIDE
 TasksMax=1
 MemoryMax=25M
@@ -25,6 +25,7 @@ PrivateDevices=true
 PrivateNetwork=true
 LockPersonality=yes
 NoNewPrivileges=yes
+RestrictSUIDSGID=yes
 
 [Install]
 WantedBy=multi-user.target
