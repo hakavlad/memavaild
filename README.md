@@ -30,9 +30,12 @@ Unified cgroup hierarchy is enabled by default on Fedora 31+. On other distros p
 
 ## Install
 
-#### On rpm-based:
+#### On [Fedora/CentOS 8](https://src.fedoraproject.org/rpms/memavaild):
 
-See https://copr.fedorainfracloud.org/coprs/elxreno/memavaild/
+```
+$ sudo dnf install memavaild
+$ sudo systemctl enable --now memavaild.service
+```
 
 #### On other distros:
 
