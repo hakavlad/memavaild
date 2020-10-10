@@ -13,32 +13,32 @@ all:
 	@ echo "Use: make install, make uninstall"
 
 base:
-	install -d $(DESTDIR)$(SBINDIR)
-	install -m0755 memavaild $(DESTDIR)$(SBINDIR)/memavaild
+	install -p -d $(DESTDIR)$(SBINDIR)
+	install -p -m0755 memavaild $(DESTDIR)$(SBINDIR)/memavaild
 
-	install -d $(DESTDIR)$(DOCDIR)
-	install -m0644 README.md $(DESTDIR)$(DOCDIR)/README.md
+	install -p -d $(DESTDIR)$(DOCDIR)
+	install -p -m0644 README.md $(DESTDIR)$(DOCDIR)/README.md
 
-	install -d $(DESTDIR)$(SYSCONFDIR)
+	install -p -d $(DESTDIR)$(SYSCONFDIR)
 
 	sed "s|:TARGET_DATADIR:|$(DATADIR)|" \
 		memavaild.conf.in > memavaild.conf
 
-	install -m0644 memavaild.conf $(DESTDIR)$(SYSCONFDIR)/memavaild.conf
+	install -p -m0644 memavaild.conf $(DESTDIR)$(SYSCONFDIR)/memavaild.conf
 
-	install -d $(DESTDIR)$(DATADIR)/memavaild
+	install -p -d $(DESTDIR)$(DATADIR)/memavaild
 
-	install -m0644 memavaild.conf $(DESTDIR)$(DATADIR)/memavaild/memavaild.conf
+	install -p -m0644 memavaild.conf $(DESTDIR)$(DATADIR)/memavaild/memavaild.conf
 
 	rm -fv memavaild.conf
 
 units:
-	install -d $(DESTDIR)$(SYSTEMDUNITDIR)
+	install -p -d $(DESTDIR)$(SYSTEMDUNITDIR)
 
 	sed "s|:TARGET_SBINDIR:|$(SBINDIR)|; s|:TARGET_SYSCONFDIR:|$(SYSCONFDIR)|" \
 		memavaild.service.in > memavaild.service
 
-	install -m0644 memavaild.service $(DESTDIR)$(SYSTEMDUNITDIR)/memavaild.service
+	install -p -m0644 memavaild.service $(DESTDIR)$(SYSTEMDUNITDIR)/memavaild.service
 
 	rm -fv memavaild.service
 
