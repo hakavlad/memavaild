@@ -60,7 +60,7 @@ $ sudo make uninstall
 
 ## How to configure
 
-Edit the config: `$SYSCONFDIR/memavaild.conf` (`/etc/memavaild.conf` or `/usr/local/etc/memavaild.conf`).
+Edit the config (`/etc/memavaild.conf` or `/usr/local/etc/memavaild.conf`) and restart the service.
 
 ## Demo
 
