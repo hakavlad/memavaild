@@ -1,3 +1,3 @@
-if id memavaild; then true; else useradd -r -s /bin/false memavaild; fi
+if useradd -r -s /bin/false memavaild; then true; else true; fi
 systemctl daemon-reload
 echo "memavaild package has been installed"
