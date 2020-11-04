@@ -52,11 +52,10 @@ units:
 	rm -fv memavaild.service
 
 useradd:
-	-useradd -r -M -s /bin/false memavaild
+	-useradd -r -s /bin/false memavaild &>/dev/null
 
 chcon:
-	-chcon -t systemd_unit_file_t $(DESTDIR)$(SYSTEMDUNITDIR)/memavaild.service
-	# Don't worry if you see "make: [chcon] Error 1", just ignore it.
+	-chcon -t systemd_unit_file_t $(DESTDIR)$(SYSTEMDUNITDIR)/memavaild.service &>/dev/null
 
 daemon-reload:
 	-systemctl daemon-reload
