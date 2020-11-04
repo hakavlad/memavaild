@@ -68,6 +68,7 @@ reinstall-deb:
 	sudo apt install --reinstall ./deb/package.deb
 
 install: base units useradd chcon daemon-reload
+	# This is fine.
 
 uninstall-base:
 	rm -fv $(DESTDIR)$(SBINDIR)/memavaild
