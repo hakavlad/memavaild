@@ -1,0 +1,3 @@
+id "memavaild" &>/dev/null || useradd -r -s /bin/false memavaild
+systemctl daemon-reload
+echo "memavaild package has been installed"

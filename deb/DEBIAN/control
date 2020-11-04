@@ -1,0 +1,9 @@
+Package: memavaild
+Version: 0.5
+Section: admin
+Architecture: all
+Depends: python3
+Maintainer: Alexey Avramov <hakavlad@gmail.com>
+Priority: optional
+Homepage: https://github.com/hakavlad/memavaild
+Description: Daemon that keeps amount of available memory

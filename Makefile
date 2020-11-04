@@ -61,6 +61,13 @@ chcon:
 daemon-reload:
 	-systemctl daemon-reload
 
+build_deb: base units
+
+reinstall-deb:
+	set -v
+	deb/build.sh
+	sudo apt install --reinstall ./deb/package.deb
+
 install: base units useradd chcon daemon-reload
 
 uninstall-base:

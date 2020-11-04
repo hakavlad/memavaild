@@ -44,6 +44,29 @@ $ yay -S memavaild-git
 $ sudo systemctl enable --now memavaild.service
 ```
 
+#### To install on Debian and Ubuntu-based systems:
+
+It's easy to build a deb package with the latest git snapshot. Install build dependencies:
+```bash
+$ sudo apt install make fakeroot
+```
+
+Clone the latest git snapshot and run the build script to build the package:
+```bash
+$ git clone https://github.com/hakavlad/memavaild.git && cd memavaild
+$ deb/build.sh
+```
+
+Install the package:
+```bash
+$ sudo apt install --reinstall ./deb/package.deb
+```
+
+Start and enable `memavaild.service` after installing the package:
+```bash
+$ sudo systemctl enable --now memavaild.service
+```
+
 #### On other distros:
 
 Install:
