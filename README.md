@@ -2,7 +2,7 @@
 # memavaild
 
 [![Total alerts](https://img.shields.io/lgtm/alerts/g/hakavlad/memavaild.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/hakavlad/memavaild/alerts/)
-[![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/hakavlad/memavaild.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/hakavlad/memavaild/context:python)
+[![Packaging status](https://repology.org/badge/vertical-allrepos/memavaild.svg)](https://repology.org/project/memavaild/versions)
 
 Improve responsiveness during heavy swapping: keep amount of available memory.
 
