@@ -1,6 +1,7 @@
 [Unit]
-Description=Improve responsiveness during heavy swapping: keep amount of available memory
-Documentation=https://github.com/hakavlad/memavaild
+Description=Daemon that keeps amount of available memory
+Documentation=man:memavaild(8) https://github.com/hakavlad/memavaild
+Requires=system.slice user.slice
 
 [Service]
 ExecStart=:TARGET_SBINDIR:/memavaild -c :TARGET_SYSCONFDIR:/memavaild.conf
