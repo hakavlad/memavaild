@@ -21,7 +21,7 @@ Effects: tasks are performed at less I/O and memory pressure (and this may be de
 
 ## How to enable unified cgroup hierarchy
 
-Unified cgroup hierarchy is enabled by default on Fedora 31+. On other distros pass `systemd.unified_cgroup_hierarchy=1` in the kernel boot cmdline.
+Unified cgroup hierarchy is enabled by default on Fedora 31+. On other distros pass `systemd.unified_cgroup_hierarchy=1` to the kernel boot cmdline.
 
 ## Known problems
 
