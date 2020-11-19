@@ -52,13 +52,13 @@ units:
 	rm -fv memavaild.service
 
 useradd:
-	-useradd -r -s /bin/false memavaild &>/dev/null
+	useradd -r -s /bin/false memavaild || :
 
 chcon:
-	-chcon -t systemd_unit_file_t $(DESTDIR)$(SYSTEMDUNITDIR)/memavaild.service &>/dev/null
+	chcon -t systemd_unit_file_t $(DESTDIR)$(SYSTEMDUNITDIR)/memavaild.service || :
 
 daemon-reload:
-	-systemctl daemon-reload
+	systemctl daemon-reload || :
 
 build_deb: base units
 
@@ -78,9 +78,8 @@ uninstall-base:
 	rm -fvr $(DESTDIR)$(DOCDIR)/
 
 uninstall-units:
-	# 'make uninstall-units' must not fail with error if systemctl is unavailable or returns error
-	-systemctl stop memavaild.service || true
-	-systemctl disable memavaild.service || true
+	systemctl stop memavaild.service || :
+	systemctl disable memavaild.service || :
 
 	rm -fv $(DESTDIR)$(SYSTEMDUNITDIR)/memavaild.service
 
