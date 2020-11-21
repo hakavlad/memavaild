@@ -1,5 +1,5 @@
 Package: memavaild
-Version: 0.5
+Version: 0.6
 Section: admin
 Architecture: all
 Depends: python3
