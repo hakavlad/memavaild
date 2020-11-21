@@ -4,18 +4,19 @@
 .hy
 .SH NAME
 .PP
-memavaild \- Daemon that keeps amount of available memory
+\f[C]memavaild\f[] \- Daemon that keeps amount of available memory
 .SH SYNOPSIS
 .PP
 \f[B]memavaild\f[] [\f[B]OPTION\f[]]...
 .SH DESCRIPTION
 .PP
-memavaild is a daemon that tries to keep amount of available memory to
-improve system responsiveness during heavy swapping.
+\f[C]memavaild\f[] is a daemon that tries to keep amount of available
+memory to improve system responsiveness during heavy swapping.
 .PP
-Default behavior: the control groups specified in the config (user.slice
-and system.slice) are swapped out when MemAvailable is low by reducing
-memory.high (values change dynamically).
+Default behavior: the control groups specified in the config
+(\f[C]user.slice\f[] and \f[C]system.slice\f[]) are swapped out when
+MemAvailable is low by reducing \f[C]memory.high\f[] (values change
+dynamically).
 memavaild tries to keep about 3% available memory.
 .PP
 Effects: tasks are performed at less I/O and memory pressure (and this
@@ -33,18 +34,34 @@ Python (>= 3.3)
 .IP \[bu] 2
 systemd with unified cgroup hierarchy
 .SH Known problems
-.PP
+.IP \[bu] 2
+The documentation is terrible (no config keys description, for example);
+.IP \[bu] 2
 The ZFS ARC cache is memory\-reclaimable, like the Linux buffer cache.
 However, in contrast to the buffer cache, it currently does not count to
 MemAvailable (see <https://github.com/openzfs/zfs/issues/10255>).
-Don\[aq]t use memavaild with ZFS.
+Don\[aq]t use \f[C]memavaild\f[] with ZFS;
+.IP \[bu] 2
+Seems like \f[C]memavaild\f[] violates the second
+rule (https://systemd.io/CGROUP_DELEGATION/): \f[C]memavaild\f[]
+manipulates the attributes of cgroups created by systemd
+(\f[C]memavaild\f[] changes \f[C]memory.high\f[] values).
 .SH FILES
 .SS :SYSCONFDIR:/memavaild.conf
 .PP
 path to configuration file
 .SS :DATADIR:/memavaild/memavaild.conf
 .PP
-path to file with \f[I]default\f[] memavaild.conf values
+path to file with \f[I]default\f[] \f[C]memavaild.conf\f[] values
+.SH RESTORE DEFAULT CONFIG
+.PP
+To resore config file with default values execute
+.IP
+.nf
+\f[C]
+sudo\ cp\ :DATADIR:/memavaild/memavaild.conf\ :SYSCONFDIR:/memavaild.conf
+\f[]
+.fi
 .SH HOW TO CONFIGURE
 .PP
 Edit the config and restart the service.
