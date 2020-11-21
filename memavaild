@@ -1,11 +1,106 @@
 #!/usr/bin/env python3
 
-import os
 from ctypes import CDLL
-from operator import itemgetter
+from os import listdir, path, times
 from signal import SIGHUP, SIGINT, SIGKILL, SIGQUIT, SIGTERM, signal
 from sys import argv, exit, stderr, stdout
 from time import monotonic, process_time, sleep
+
+
+def errprint(*text):
+    """
+    """
+    print(*text, file=stderr, flush=True)
+
+
+def readf(pathname):
+    """
+    """
+    with open(pathname, 'rb', buffering=0) as f:
+        return f.read().decode()
+
+
+def write(pathname, string):
+    """
+    """
+    with open(pathname, 'w') as f:
+        f.write(string)
+
+
+def check_controllers(cg):
+    """
+    """
+    try:
+        c = readf('/sys/fs/cgroup/' + cg + '/cgroup.controllers')
+    except (FileNotFoundError, PermissionError) as e:
+        print('I: systemd and unified cgroup hierarchy are required')
+        errprint(e)
+        exit(1)
+
+    if 'memory' not in c:
+        errprint('E: memory controller is not enabled in ' + cg)
+        exit(1)
+
+
+def check_write(cg):
+    """
+    """
+    pathname = '/sys/fs/cgroup/' + cg + '/memory.high'
+
+    try:
+        string = readf(pathname)
+    except (FileNotFoundError, PermissionError) as e:
+        errprint(e)
+        exit(1)
+
+    try:
+        write(pathname, string)
+    except PermissionError as e:
+        print('I: memory.high must be writable')
+        errprint(e)
+        exit(1)
+    except FileNotFoundError as e:
+        errprint(e)
+        exit(1)
+
+
+def format_time(t):
+    """
+    """
+    total_s = int(t)
+
+    if total_s < 60:
+        return '{}s'.format(round(t, 1))
+
+    if total_s < 3600:
+        total_m = total_s // 60
+        mod_s = total_s % 60
+        return '{}min {}s'.format(total_m, mod_s)
+
+    if total_s < 86400:
+        total_m = total_s // 60
+        mod_s = total_s % 60
+        total_h = total_m // 60
+        mod_m = total_m % 60
+        return '{}h {}min {}s'.format(total_h, mod_m, mod_s)
+
+    total_m = total_s // 60
+    mod_s = total_s % 60
+    total_h = total_m // 60
+    mod_m = total_m % 60
+    total_d = total_h // 24
+    mod_h = total_h % 24
+    return '{}d {}h {}min {}s'.format(total_d, mod_h, mod_m, mod_s)
+
+
+def rline(pathname):
+    """
+    """
+    with open(pathname, 'rb', buffering=0) as f:
+        try:
+            return int(f.read())
+        except ValueError:
+            return None
 
 
 def get_swappiness():
@@ -14,9 +109,39 @@ def get_swappiness():
     return rline('/proc/sys/vm/swappiness')
 
 
-def debug_cg():
+def mlockall():
     """
     """
+    MCL_CURRENT = 1
+    MCL_FUTURE = 2
+    MCL_ONFAULT = 4
+
+    libc = CDLL(None, use_errno=True)
+    result = libc.mlockall(MCL_CURRENT | MCL_FUTURE | MCL_ONFAULT)
+
+    if result != 0:
+        result = libc.mlockall(MCL_CURRENT | MCL_FUTURE)
+        if result != 0:
+            errprint('ERROR: cannot lock process memory: [Errno {}]'.format(
+                result))
+            exit(1)
+        else:
+            if debug_correction:
+                errprint('Process memory locked with MCL_CURRENT | MCL_FUTURE')
+    else:
+        if debug_correction:
+            errprint('Process memory locked with MCL_CURRENT | MCL_FUTURE | '
+                     'MCL_ONFAULT')
+
+
+def debug_cg(cg_dict):
+    """
+    """
+
+    if check_uid and monotonic() - uid_up_d[0] > check_uid_interval:
+        cg_dict = update_cg_dict(cg_dict)
+
+    print('CGroups state:')
     for cg in cg_dict:
         cur_path = cg_dict[cg]['cur_path']
         high_path = cg_dict[cg]['high_path']
@@ -29,19 +154,18 @@ def debug_cg():
             continue
 
         c_mib = round(c / 1024 / 1024, 1)
-        h_mib = round(h / 1024 / 1024, 1)
         c_pc = round(c / 1024 / mem_total * 100, 1)
-        h_pc = round(h / 1024 / mem_total * 100, 1)
-        print('  cgroup: {}, memory.current: {}M ({}%), memory.high:'
-              ' {}M ({}%)'.format(
-                  cg, c_mib, c_pc, h_mib, h_pc))
+
+        if h is None:
+            hui = ' max'
+        else:
+            h_mib = round(h / 1024 / 1024, 1)
+            h_pc = round(h / 1024 / mem_total * 100, 1)
+            hui = ' {}M ({}%)'.format(h_mib, h_pc)
+        print('  cgroup: {}, memory.current: {}M ({}%), memory.high:{}'.format(
+            cg, c_mib, c_pc, hui))
+
     stdout.flush()
-
-
-def errprint(*text):
-    """
-    """
-    print(*text, file=stderr, flush=True)
 
 
 def string_to_float_convert_test(string):
@@ -54,39 +178,14 @@ def string_to_float_convert_test(string):
         return None
 
 
-def mlockall():
+def string_to_int_convert_test(string):
     """
+    Try to interpret string values as integers.
     """
-    MCL_CURRENT = 1
-    MCL_FUTURE = 2
-    MCL_ONFAULT = 4
-
-    libc = CDLL('libc.so.6', use_errno=True)
-    result = libc.mlockall(MCL_CURRENT | MCL_FUTURE | MCL_ONFAULT)
-
-    if result != 0:
-        result = libc.mlockall(MCL_CURRENT | MCL_FUTURE)
-        if result != 0:
-            print('ERROR: cannot lock process memory: [Errno {}]'.format(
-                result))
-            exit(1)
-        else:
-            if debug:
-                print('Process memory locked with MCL_CURRENT | MCL_FUTURE')
-    else:
-        if debug:
-            print('Process memory locked with MCL_CURRENT | MCL_FUTURE | MCL'
-                  '_ONFAULT')
-
-
-def rline(path):
-    """
-    """
-    with open(path, 'rb', buffering=0) as f:
-        try:
-            return int(f.read())
-        except ValueError:
-            return 0
+    try:
+        return int(string)
+    except ValueError:
+        return None
 
 
 def check_mem_and_swap():
@@ -97,17 +196,9 @@ def check_mem_and_swap():
     m_list = fd['mi'].read().decode().split(' kB\n')
 
     ma = int(m_list[mem_available_index].split(':')[1])
-    st = int(m_list[swap_total_index].split(':')[1])
     sf = int(m_list[swap_free_index].split(':')[1])
 
-    return ma, st, sf
-
-
-def write(path, string):
-    """
-    """
-    with open(path, 'w') as f:
-        f.write(string)
+    return ma, sf
 
 
 def percent(num):
@@ -131,31 +222,52 @@ def sleep_after_check_mem(ma):
     else:
         pass
 
+    if debug_sleep:
+        print('Sleep', round(t, 2))
+
     sleep(t)
+
+
+def unlim(cg_dict):
+    """
+    """
+
+    if check_uid and monotonic() - uid_up_d[0] > check_uid_interval:
+        cg_dict = update_cg_dict(cg_dict)
+
+    for cg in cg_dict:
+        try:
+            if debug_correction:
+                print('Set memory.high for {}: max'.format(cg))
+            write(cg_dict[cg]['high_path'], 'max\n')
+        except (FileNotFoundError, PermissionError) as e:
+            if debug_correction:
+                errprint(e)
+            continue
 
 
 def soft_exit(num):
     """
     """
-    for cg in cg_dict:
-
-        try:
-            write(cg_dict[cg]['high_path'], 'max\n')
-        except (FileNotFoundError, PermissionError) as e:
-            if debug:
-                print(e)
-            continue
+    unlim(cg_dict)
 
     if len(fd) > 0:
         for f in fd:
             fd[f].close()
 
-    m1 = monotonic()
-    pt1 = process_time()
-    x = (pt1 - pt0) / (m1 - m0) * 100
+    m = monotonic() - start_time
+    user_time, system_time = times()[0:2]
+    p_time = user_time + system_time
+    p_percent = p_time / m * 100
 
-    print('CPU usage by the process since monitoring has started'
-          ': {}%; exit.'.format(round(x, 2)))
+    print('Uptime {}, CPU time {}s (user {}s, sys {}s), avg {}%; exit.'.format(
+        format_time(m),
+        round(p_time, 2),
+        user_time,
+        system_time,
+        round(p_percent, 2)
+    ))
+
     exit(num)
 
 
@@ -170,88 +282,121 @@ def signal_handler(signum, frame):
     for i in sig_list:
         signal(i, signal_handler_inner)
 
-    print('Signal handler called with the {} signal '.format(
+    print('Got the {} signal '.format(
         sig_dict[signum]))
 
     soft_exit(0)
 
 
-def correction():
+def get_uid_set():
     """
     """
+    uid_set = set()
+    d = '/sys/fs/cgroup/user.slice/'
+    for f in listdir(d):
+        if (f.startswith('user-') and
+            f.endswith('.slice') and
+            path.isdir(d + f) and
+                len(f) >= 12):
+            uid = f[5:-6]
+            try:
+                i_uid = int(uid)
+                if i_uid >= min_uid:
+                    uid_set.add(uid)
+            except ValueError:
+                continue
+    return uid_set
 
-    if debug:
+
+def update_cg_dict(cg_dict):
+    """
+    """
+    uid_set = get_uid_set()
+    lus = len(uid_set)
+    if lus == 0:
+        return basic_cg_dict
+    real_uid_cg_dict = dict()
+    for cg in temp_uid_cg_dict:
+        temp_key = temp_uid_cg_dict[cg]
+        t_fraction = temp_key['fraction']
+        for uid in uid_set:
+            uid_d = dict()
+            alive_num = 0
+            real_cg = cg.replace('$UID', uid)
+            if real_cg in basic_cg_dict:
+                continue
+            new_key = dict()
+            new_key.update(temp_key)
+            h = new_key['high_path'].replace('$UID', uid)
+            if path.exists(h):
+                alive_num += 1
+            else:
+                continue
+            new_key['high_path'] = h
+            c = new_key['cur_path'].replace('$UID', uid)
+            new_key['cur_path'] = c
+            uid_d[real_cg] = new_key
+        for c in uid_d:
+            k = uid_d[c]
+            k['fraction'] = t_fraction / alive_num
+        real_uid_cg_dict.update(uid_d)
+    cg_dict = basic_cg_dict.copy()
+    cg_dict.update(real_uid_cg_dict)
+    uid_up_d[0] = monotonic()
+    return cg_dict
+
+
+def correction(cg_dict):
+    """
+    """
+    if debug_correction:
         print('Enter in correction')
 
     enter_time = monotonic()
 
     while True:
+        ma, sf = check_mem_and_swap()
 
-        ma, st, sf = check_mem_and_swap()
-
-        if debug:
-            print('MemAvailable: {}M ({}%), SwapFree: {}M'.format(
+        # 1 CANCEL LIMITS
+        if sf < min_swap_free:
+            if debug_correction:
+                print('MemAvailable: {}M ({}%), SwapFree: {}M'.format(
                     round(ma / 1024, 1),
                     percent(ma / mem_total),
                     round(sf / 1024, 1)))
 
-            debug_cg()
+                debug_cg(cg_dict)
 
-        # 0
-        swappiness = get_swappiness()
-        if swappiness == 0:
-            if debug:
-                print('vm.swappiness=0')
+                print('SwapFree < $CANCEL_LIMITS_BELOW_SWAP_FREE_MIB; extend'
+                      'ing limits')
 
-            for cg in cg_dict:
+            unlim(cg_dict)
 
-                try:
-                    write(
-                        cg_dict[cg]['high_path'],
-                        str(cg_dict[cg]['lim_max']) + '\n')
-                except FileNotFoundError as e:
-
-                    if debug:
-                        print(e)
-
-                    if nonexistent_cgroup_is_eror:
-                        soft_exit(1)
-                    else:
-                        continue
-
-            sleep(max_interval)
-            break
-
-        # 1
-        if sf < min_swap_free:
-
-            if debug:
-                print('SwapFree < $MIN_SWAP_FREE; extend limits')
-
-            for cg in cg_dict:
-
-                try:
-                    write(cg_dict[cg]['high_path'], str(
-                        cg_dict[cg]['lim_max']) + '\n')
-                except FileNotFoundError as e:
-
-                    if debug:
-                        print(e)
-
-                    if nonexistent_cgroup_is_eror:
-                        soft_exit(1)
-                    else:
-                        continue
+            if debug_sleep:
+                print('Sleep', round(max_interval, 2))
 
             sleep(max_interval)
 
-            if debug:
+            if debug_correction:
                 print('Exit from correction')
+                stdout.flush()
 
             break
 
-        # 2
+        # 2 CORRECTION
         if ma < keep_memavail_min:
+
+            if check_uid and monotonic() - uid_up_d[0] > check_uid_interval:
+                cg_dict = update_cg_dict(cg_dict)
+
+            if debug_correction:
+                print('MemAvailable: {}M ({}%), SwapFree: {}M'.format(
+                    round(ma / 1024, 1),
+                    percent(ma / mem_total),
+                    round(sf / 1024, 1)))
+
+                debug_cg(cg_dict)
+
             enter_time = monotonic()
 
             c_list = []
@@ -262,15 +407,8 @@ def correction():
 
                 try:
                     cur = rline(cg_dict[cg]['cur_path'])
-                except FileNotFoundError as e:
-
-                    if debug:
-                        print(e)
-
-                    if nonexistent_cgroup_is_eror:
-                        soft_exit(1)
-                    else:
-                        continue
+                except FileNotFoundError:
+                    continue
 
                 cg_dict[cg]['real_cur'] = cur
                 cur_sum += cur
@@ -293,16 +431,22 @@ def correction():
                 c_list.append((cg, delta))
 
             if len(c_list) == 0:
-                if debug:
+                if debug_correction:
                     print('Nothing to limit, no cgroup found')
                     print('Exit from correction')
+
+                if debug_sleep:
+                    print('Sleep', round(max_interval, 2))
+
                 sleep(max_interval)
                 break
 
-            c_list = sorted(c_list, key=itemgetter(1), reverse=True)
+            c_list.sort(key=lambda i: i[1], reverse=True)
 
-            if debug:
-                print('Q:', c_list)
+            if debug_correction:
+                print('Queue:')
+                for i in c_list:
+                    print(' ', i)
 
             delta = keep_memavail_mid - ma
             if delta > max_step:
@@ -310,8 +454,13 @@ def correction():
 
             delta_b = delta * 1024
 
-            if debug:
-                print('step, M:', round(delta / 1024, 1))
+            if debug_correction:
+                print('Correction step: {}M'.format(round(delta / 1024, 1)))
+
+            corr_ok = False
+
+            if debug_correction:
+                pt0 = process_time()
 
             for cg, _ in c_list:
                 cur = cg_dict[cg]['real_cur']
@@ -323,58 +472,72 @@ def correction():
 
                 new_max = cur - delta_b
 
-                if debug:
-                    print('set new memory.high for {}: {} MiB'.format(
-                        cg, round(new_max / 1024 / 1024)))
+                if debug_correction:
+                    print('Set memory.high for {}: {}M'.format(
+                        cg, round(new_max / 1024 / 1024, 1)
+                    ))
 
                 try:
                     write(cg_dict[cg]['high_path'], str(new_max) + '\n')
-                except FileNotFoundError as e:
-
-                    if debug:
-                        print(e)
-
-                    if nonexistent_cgroup_is_eror:
-                        soft_exit(1)
-                    else:
-                        continue
+                    corr_ok = True
+                except (FileNotFoundError, PermissionError) as e:
+                    if debug_correction:
+                        errprint(e)
+                    continue
 
                 break
 
-            sleep(min_interval)
+            if debug_correction:
+                if not corr_ok:
+                    print('  Nothing to limit')
+                    sleep_after_check_mem(ma)
 
-        # 3
+            if debug_correction:
+                pt1 = process_time()
+                pt = pt1 - pt0
+                print('Consumed {}ms CPU time during last correction'.format(
+                    round(pt * 1000)))
+
+            if debug_sleep:
+                print('Sleep', round(correction_interval, 3))
+
+            sleep(correction_interval)
+
+        # 3 WAITING
         elif ma < keep_memavail_max:
 
             enter_time = monotonic()
 
+            if debug_mem:
+                print('MemAvailable: {}M ({}%), SwapFree: {}M'.format(
+                    round(ma / 1024, 1),
+                    percent(ma / mem_total),
+                    round(sf / 1024, 1)))
+
+                debug_cg(cg_dict)
+
             sleep_after_check_mem(ma)
 
-        # 4
+        # 4 WAITING OR CANCEL LIMITS
         else:
+
+            if debug_mem:
+                print('MemAvailable: {}M ({}%), SwapFree: {}M'.format(
+                    round(ma / 1024, 1),
+                    percent(ma / mem_total),
+                    round(sf / 1024, 1)))
+
+                debug_cg(cg_dict)
 
             if monotonic() - enter_time > correction_exit_time:
 
-                if debug:
-                    print('$CORRECTION_EXIT_TIME expired; extend limits')
+                if debug_correction:
+                    print('$CANCEL_LIMITS_IN_TIME expired; '
+                          'extending limits')
 
-                for cg in cg_dict:
+                unlim(cg_dict)
 
-                    try:
-                        write(
-                            cg_dict[cg]['high_path'],
-                            str(cg_dict[cg]['lim_max']) + '\n')
-                    except FileNotFoundError as e:
-
-                        if debug:
-                            print(e)
-
-                        if nonexistent_cgroup_is_eror:
-                            soft_exit(1)
-                        else:
-                            continue
-
-                if debug:
+                if debug_correction:
                     print('Exit from correction')
                 break
 
@@ -384,6 +547,8 @@ def correction():
 ###############################################################################
 
 
+start_time = monotonic()
+
 a = argv[1:]
 la = len(a)
 if la == 0:
@@ -392,7 +557,7 @@ if la == 0:
 elif la == 2:
     if a[0] == '-c':
         config = a[1]
-        config = os.path.abspath(config)
+        config = path.abspath(config)
     else:
         errprint('invalid input')
         exit(1)
@@ -418,7 +583,9 @@ mt_b = mt * 1024
 
 config_dict = dict()
 
-cg_dict = dict()
+basic_cg_dict = dict()
+
+temp_uid_cg_dict = dict()
 
 
 try:
@@ -435,10 +602,11 @@ try:
                 config_dict[key] = value
 
             if line[0] == '@' and '=' in line:
+
                 if line.startswith('@LIMIT '):
                     a_list = line.partition('@LIMIT ')[2:][0].split()
                     lal = len(a_list)
-                    if lal != 4:
+                    if lal != 3:
                         errprint('invalid conf')
                         exit(1)
 
@@ -449,26 +617,28 @@ try:
 
                     cg = a_dict['CGROUP'].strip('/')
 
-                    if cg in cg_dict:
+                    if cg in basic_cg_dict:
                         errprint('err, invalid conf, cgroup ({}) dupli'
                                  'cation'.format(cg))
                         exit(1)
 
                     cur_path = '/sys/fs/cgroup/{}/memory.current'.format(cg)
                     high_path = '/sys/fs/cgroup/{}/memory.high'.format(cg)
-                    fraction = float(a_dict['FRACTION'])
-                    min_percent = a_dict['MIN_PERCENT']
-                    max_percent = a_dict['MAX_PERCENT']
+                    fraction = float(a_dict['RELATIVE_SHARE'])
+                    min_percent = a_dict['MIN_MEM_HIGH_PERCENT']
                     m_min = int(mem_total * 1024 / 100 * float(min_percent))
-                    m_max = int(mem_total * 1024 / 100 * float(max_percent))
 
-                    cg_dict[cg] = dict()
-                    cg_dict[cg] = {
+                    key = {
                         'cur_path': cur_path,
                         'high_path': high_path,
                         'fraction': fraction,
-                        'lim_min': m_min,
-                        'lim_max': m_max}
+                        'lim_min': m_min}
+
+                    if '$UID' in cg:
+                        temp_uid_cg_dict[cg] = key
+                    else:
+                        basic_cg_dict[cg] = key
+
                 else:
                     print('invalid conf')
 
@@ -478,64 +648,65 @@ except (PermissionError, UnicodeDecodeError, IsADirectoryError,
     exit(1)
 
 
-if len(cg_dict) == 0:
-    print('ERROR: invalid config, no one cgroup set to limit')
-    exit(1)
+union_cg_dict = dict()
+union_cg_dict.update(basic_cg_dict)
+union_cg_dict.update(temp_uid_cg_dict)
 
+
+if len(union_cg_dict) == 0:
+    print('WARNING: no one cgroup set to limit')
 
 frac_sum = 0
-for cg in cg_dict:
-    frac_sum += cg_dict[cg]['fraction']
-for cg in cg_dict:
-    cg_dict[cg]['fraction'] = round(cg_dict[cg]['fraction'] / frac_sum, 4)
+for cg in union_cg_dict:
+    frac_sum += union_cg_dict[cg]['fraction']
+for cg in union_cg_dict:
+    union_cg_dict[cg]['fraction'] = round(
+        union_cg_dict[cg]['fraction'] / frac_sum, 4)
 
 
-if '$DEBUG' in config_dict:
-    debug = config_dict['$DEBUG']
-    if debug == 'True':
-        debug = True
-    elif debug == 'False':
-        debug = False
-    else:
-        errprint('invalid $DEBUG value')
+if '$MIN_UID' in config_dict:
+    string = config_dict['$MIN_UID']
+    min_uid = string_to_int_convert_test(string)
+    if min_uid is None or min_uid < 0:
+        errprint('invalid $MIN_UID value')
         exit(1)
 else:
-    errprint('missing $DEBUG key')
+    errprint('missing $MIN_UID key')
     exit(1)
 
 
-if '$MIN_SWAP_FREE_MIB' in config_dict:
-    string = config_dict['$MIN_SWAP_FREE_MIB']
+if '$CANCEL_LIMITS_BELOW_SWAP_FREE_MIB' in config_dict:
+    string = config_dict['$CANCEL_LIMITS_BELOW_SWAP_FREE_MIB']
     min_swap_free_mib = string_to_float_convert_test(string)
     if min_swap_free_mib is None:
-        errprint('invalid $MIN_SWAP_FREE_MIB value')
+        errprint('invalid $CANCEL_LIMITS_BELOW_SWAP_FREE_MIB value')
         exit(1)
     min_swap_free = int(min_swap_free_mib * 1024)
 else:
-    errprint('missing $MIN_SWAP_FREE_MIB key')
+    errprint('missing $CANCEL_LIMITS_BELOW_SWAP_FREE_MIB key')
     exit(1)
 
 
-if '$MAX_STEP_MIB' in config_dict:
-    string = config_dict['$MAX_STEP_MIB']
+if '$MAX_CORRECTION_STEP_MIB' in config_dict:
+    string = config_dict['$MAX_CORRECTION_STEP_MIB']
     max_step_mib = string_to_float_convert_test(string)
     if max_step_mib is None:
-        errprint('invalid $MAX_STEP_MIB value')
+        errprint('invalid $MAX_CORRECTION_STEP_MIB value')
         exit(1)
     max_step = int(max_step_mib * 1024)
 else:
-    errprint('missing $MAX_STEP_MIB key')
+    errprint('missing $MAX_CORRECTION_STEP_MIB key')
     exit(1)
 
 
-if '$CORRECTION_EXIT_TIME' in config_dict:
-    string = config_dict['$CORRECTION_EXIT_TIME']
+if '$CANCEL_LIMITS_IN_TIME' in config_dict:
+    string = config_dict['$CANCEL_LIMITS_IN_TIME']
     correction_exit_time = string_to_float_convert_test(string)
     if correction_exit_time is None:
-        errprint('invalid $CORRECTION_EXIT_TIME value')
+        errprint('invalid $CANCEL_LIMITS_IN_TIME value')
         exit(1)
 else:
-    errprint('missing $CORRECTION_EXIT_TIME key')
+    errprint('missing $CANCEL_LIMITS_IN_TIME key')
     exit(1)
 
 
@@ -579,14 +750,25 @@ else:
     stable_interval = False
 
 
-if '$KEEP_MEM_MIN' in config_dict:
-    string = config_dict['$KEEP_MEM_MIN']
+if '$CORRECTION_INTERVAL' in config_dict:
+    string = config_dict['$CORRECTION_INTERVAL']
+    correction_interval = string_to_float_convert_test(string)
+    if correction_interval is None:
+        errprint('invalid $CORRECTION_INTERVAL value')
+        exit(1)
+else:
+    errprint('missing $CORRECTION_INTERVAL key')
+    exit(1)
+
+
+if '$MIN_MEM_AVAILABLE' in config_dict:
+    string = config_dict['$MIN_MEM_AVAILABLE']
     if string.endswith('%'):
         keep_memavail_min_percent = string[:-1].rstrip()
         keep_memavail_min_percent = string_to_float_convert_test(
             keep_memavail_min_percent)
         if keep_memavail_min_percent is None:
-            errprint('invalid $KEEP_MEM_MIN value')
+            errprint('invalid $MIN_MEM_AVAILABLE value')
             exit(1)
         keep_memavail_min = int(mem_total / 100 * keep_memavail_min_percent)
     elif string.endswith('M'):
@@ -594,25 +776,25 @@ if '$KEEP_MEM_MIN' in config_dict:
         keep_memavail_min_mib = string_to_float_convert_test(
             keep_memavail_min_mib)
         if keep_memavail_min_mib is None:
-            errprint('invalid $KEEP_MEM_MIN value')
+            errprint('invalid $MIN_MEM_AVAILABLE value')
             exit(1)
         keep_memavail_min = int(keep_memavail_min_mib * 1024)
     else:
-        errprint('invalid $KEEP_MEM_MIN value')
+        errprint('invalid $MIN_MEM_AVAILABLE value')
         exit(1)
 else:
-    errprint('missing $KEEP_MEM_MIN key')
+    errprint('missing $MIN_MEM_AVAILABLE key')
     exit(1)
 
 
-if '$KEEP_MEM_MID' in config_dict:
-    string = config_dict['$KEEP_MEM_MID']
+if '$TARGET_MEM_AVAILABLE' in config_dict:
+    string = config_dict['$TARGET_MEM_AVAILABLE']
     if string.endswith('%'):
         keep_memavail_mid_percent = string[:-1].rstrip()
         keep_memavail_mid_percent = string_to_float_convert_test(
             keep_memavail_mid_percent)
         if keep_memavail_mid_percent is None:
-            errprint('invalid $KEEP_MEM_MID value')
+            errprint('invalid $TARGET_MEM_AVAILABLE value')
             exit(1)
         keep_memavail_mid = int(mem_total / 100 * keep_memavail_mid_percent)
     elif string.endswith('M'):
@@ -620,25 +802,25 @@ if '$KEEP_MEM_MID' in config_dict:
         keep_memavail_mid_mib = string_to_float_convert_test(
             keep_memavail_mid_mib)
         if keep_memavail_mid_mib is None:
-            errprint('invalid $KEEP_MEM_MID value')
+            errprint('invalid $TARGET_MEM_AVAILABLE value')
             exit(1)
         keep_memavail_mid = int(keep_memavail_mid_mib * 1024)
     else:
-        errprint('invalid $KEEP_MEM_MID value')
+        errprint('invalid $TARGET_MEM_AVAILABLE value')
         exit(1)
 else:
-    errprint('missing $KEEP_MEM_MID key')
+    errprint('missing $TARGET_MEM_AVAILABLE key')
     exit(1)
 
 
-if '$KEEP_MEM_MAX' in config_dict:
-    string = config_dict['$KEEP_MEM_MAX']
+if '$CANCEL_LIMITS_ABOVE_MEM_AVAILABLE' in config_dict:
+    string = config_dict['$CANCEL_LIMITS_ABOVE_MEM_AVAILABLE']
     if string.endswith('%'):
         keep_memavail_max_percent = string[:-1].rstrip()
         keep_memavail_max_percent = string_to_float_convert_test(
             keep_memavail_max_percent)
         if keep_memavail_max_percent is None:
-            errprint('invalid $KEEP_MEM_MAX value')
+            errprint('invalid $CANCEL_LIMITS_ABOVE_MEM_AVAILABLE value')
             exit(1)
         keep_memavail_max = int(mem_total / 100 * keep_memavail_max_percent)
     elif string.endswith('M'):
@@ -646,52 +828,91 @@ if '$KEEP_MEM_MAX' in config_dict:
         keep_memavail_max_mib = string_to_float_convert_test(
             keep_memavail_max_mib)
         if keep_memavail_max_mib is None:
-            errprint('invalid $KEEP_MEM_MAX value')
+            errprint('invalid $CANCEL_LIMITS_ABOVE_MEM_AVAILABLE value')
             exit(1)
         keep_memavail_max = int(keep_memavail_max_mib * 1024)
     else:
-        errprint('invalid $KEEP_MEM_MAX value')
+        errprint('invalid $CANCEL_LIMITS_ABOVE_MEM_AVAILABLE value')
         exit(1)
 else:
-    errprint('missing $KEEP_MEM_MAX key')
+    errprint('missing $CANCEL_LIMITS_ABOVE_MEM_AVAILABLE key')
     exit(1)
 
 
-if '$NONEXISTENT_CGROUP_IS_ERROR' in config_dict:
-    nonexistent_cgroup_is_eror = config_dict['$NONEXISTENT_CGROUP_IS_ERROR']
-    if nonexistent_cgroup_is_eror == 'True':
-        nonexistent_cgroup_is_eror = True
-    elif nonexistent_cgroup_is_eror == 'False':
-        nonexistent_cgroup_is_eror = False
+debug_correction = False
+debug_mem = False
+debug_sleep = False
+
+if '$VERBOSITY' in config_dict:
+    verbosity = config_dict['$VERBOSITY']
+
+    if verbosity == '0':
+        pass
+    elif verbosity == '1':
+        debug_correction = True
+    elif verbosity == '2':
+        debug_correction = True
+        debug_mem = True
+    elif verbosity == '3':
+        debug_correction = True
+        debug_mem = True
+        debug_sleep = True
     else:
-        errprint('invalid $NONEXISTENT_CGROUP_IS_ERROR value')
+        errprint('invalid $VERBOSITY value')
         exit(1)
+
 else:
-    errprint('missing $NONEXISTENT_CGROUP_IS_ERROR key')
+    errprint('missing $VERBOSITY key')
     exit(1)
 
 
-if debug:
-    print('keep_memavail_min:', keep_memavail_min)
-    print('keep_memavail_mid:', keep_memavail_mid)
-    print('keep_memavail_max:', keep_memavail_max)
-    print('max_step:', max_step)
-    print('min_swap_free:', min_swap_free)
-    print('correction_exit_time:', correction_exit_time)
-    print('mem_fill_rate:', mem_fill_rate)
-    print('min_interval:', min_interval)
-    print('max_interval:', max_interval)
-    print('nonexistent_cgroup_is_error:', nonexistent_cgroup_is_eror)
-    print('debug:', debug)
-    for cg in cg_dict:
+temp_uid_cg_set = set(temp_uid_cg_dict)
+
+if len(temp_uid_cg_set) > 0:
+    check_uid = True
+else:
+    check_uid = False
+
+
+if debug_correction:
+    print('$MIN_MEM_AVAILABLE:', keep_memavail_min, '(KiB)')
+    print('$TARGET_MEM_AVAILABLE:', keep_memavail_mid, '(KiB)')
+    print('$MAX_CORRECTION_STEP_MIB:', max_step, '(KiB)')
+    print('$CANCEL_LIMITS_ABOVE_MEM_AVAILABLE:', keep_memavail_max, '(KiB)')
+    print('$CANCEL_LIMITS_IN_TIME:', correction_exit_time, '(sec)')
+    print('$CANCEL_LIMITS_BELOW_SWAP_FREE_MIB:', min_swap_free, '(KiB)')
+    print('$MEM_FILL_RATE:', mem_fill_rate, '(KiB/sec)')
+    print('$MIN_INTERVAL:', min_interval, '(sec)')
+    print('$MAX_INTERVAL:', max_interval, '(sec)')
+    print('$CORRECTION_INTERVAL:', correction_interval, '(sec)')
+    print('$VERBOSITY:', verbosity)
+    print('$MIN_UID:', min_uid)
+
+    for cg in basic_cg_dict:
         print('cgroup: {} {}'.format(cg, '{'))
-        x = cg_dict[cg]
+        x = basic_cg_dict[cg]
         for i in x:
             print('  {}: {}'.format(i, x[i]))
         print('}')
 
+    if check_uid:
+        for cg in temp_uid_cg_dict:
+            print('[template] cgroup: {} {}'.format(cg, '{'))
+            x = temp_uid_cg_dict[cg]
+            for i in x:
+                print('  {}: {}'.format(i, x[i]))
+            print('}')
 
-###############################################################################
+
+cg_dict = basic_cg_dict
+
+
+check_controllers('user.slice')
+check_controllers('system.slice')
+
+
+check_write('user.slice')
+check_write('system.slice')
 
 
 mlockall()
@@ -716,56 +937,56 @@ sig_list = [SIGTERM, SIGINT, SIGQUIT, SIGHUP]
 for i in sig_list:
     signal(i, signal_handler)
 
-m0 = monotonic()
-pt0 = process_time()
 
-
-if not os.path.exists('/sys/fs/cgroup/cgroup.procs'):
-    print('ERROR: unified cgroup hierarchy not found')
-    exit(1)
+if check_uid:
+    check_uid_interval = 10
+    uid_up_d = dict()
+    uid_up_d[0] = monotonic()
+    cg_dict = update_cg_dict(cg_dict)
 
 
 for cg in cg_dict:
     try:
-        write(cg_dict[cg]['high_path'], '{}\n'.format(
-            cg_dict[cg]['lim_max']))
-    except Exception as e:
-        if nonexistent_cgroup_is_eror:
-            if debug:
-                print(e)
-            soft_exit(1)
+        if debug_correction:
+            print('Set memory.high for {}: max'.format(cg))
+        write(cg_dict[cg]['high_path'], 'max\n')
+    except (FileNotFoundError, PermissionError) as e:
+        print(e)
+        continue
 
 
 swappiness = get_swappiness()
-if debug:
+if debug_correction:
     print('vm.swappiness:', swappiness)
 if swappiness == 0:
     print('WARNING: vm.swappiness=0')
 
 
+if path.exists('/proc/spl/kstat/zfs'):
+    print('WARNING: ZFS found. Available memory will not be calculated '
+          'correctly (github.com/openzfs/zfs/issues/10255)')
+
+
 print('Monitoring has started!')
 
 
+stdout.flush()
+
+
 while True:
-    ma, st, sf = check_mem_and_swap()
-    if debug:
+    ma, sf = check_mem_and_swap()
+    if debug_mem:
         print('MemAvailable: {}M ({}%), SwapFree: {}M'.format(
             round(ma / 1024, 1),
             percent(ma / mem_total),
             round(sf / 1024, 1)))
-        debug_cg()
+        debug_cg(cg_dict)
     if sf < min_swap_free:
+        if debug_sleep:
+            print('Sleep', round(max_interval, 3))
         sleep(max_interval)
         continue
     if ma < keep_memavail_min:
-
-        swappiness = get_swappiness()
-        if swappiness == 0:
-            if debug:
-                print('vm.swappiness=0')
-            sleep(max_interval)
-            continue
-
-        correction()
+        correction(cg_dict)
     else:
         sleep_after_check_mem(ma)
