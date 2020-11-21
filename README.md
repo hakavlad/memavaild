@@ -24,9 +24,9 @@ Effects: tasks are performed at less I/O and memory pressure (and this may be de
 Unified cgroup hierarchy is enabled by default on Fedora 31+. On other distros pass `systemd.unified_cgroup_hierarchy=1` to the kernel boot cmdline.
 
 ## Known problems
-
-- The documentation is terrible (config keys description and man page may be added later).
-- The ZFS ARC cache is memory-reclaimable, like the Linux buffer cache. However, in contrast to the buffer cache, it currently does not count to MemAvailable (see openzfs/zfs#10255). Don't use memavaild with ZFS.
+- The documentation is terrible (no config keys description, for example);
+- The ZFS ARC cache is memory-reclaimable, like the Linux buffer cache. However, in contrast to the buffer cache, it currently does not count to MemAvailable (see [openzfs/zfs#10255](https://github.com/openzfs/zfs/issues/10255)). Don't use `memavaild` with ZFS;
+- Seems like `memavaild` violates [the second rule](https://systemd.io/CGROUP_DELEGATION/): `memavaild` manipulates the attributes of cgroups created by systemd (`memavaild` changes `memory.high` values).
 
 ## Install
 
