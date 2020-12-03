@@ -36,13 +36,14 @@ $ sudo dnf install memavaild
 $ sudo systemctl enable --now memavaild.service
 ```
 
-#### For Arch Linux there's an [AUR package](https://aur.archlinux.org/packages/memavaild-git/)
+#### For Arch Linux there's an [AUR package](https://aur.archlinux.org/packages/memavaild/)
 
 Use your favorite [AUR helper](https://wiki.archlinux.org/index.php/AUR_helpers). For example,
 ```bash
-$ yay -S memavaild-git
+$ yay -S memavaild
 $ sudo systemctl enable --now memavaild.service
 ```
+[memavaild-git](https://aur.archlinux.org/packages/memavaild-git/) is also available.
 
 #### To install on Debian and Ubuntu-based systems:
 
