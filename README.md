@@ -1,6 +1,7 @@
 
 # memavaild
 
+![CodeQL](https://github.com/hakavlad/memavaild/workflows/CodeQL/badge.svg)
 [![Total alerts](https://img.shields.io/lgtm/alerts/g/hakavlad/memavaild.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/hakavlad/memavaild/alerts/)
 [![Packaging status](https://repology.org/badge/tiny-repos/memavaild.svg)](https://repology.org/project/memavaild/versions)
 
