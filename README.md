@@ -31,12 +31,6 @@ Unified cgroup hierarchy is enabled by default on Fedora 31+. On other distros p
 
 ## Install
 
-#### On [Fedora/CentOS 8](https://src.fedoraproject.org/rpms/memavaild):
-```bash
-$ sudo dnf install memavaild
-$ sudo systemctl enable --now memavaild.service
-```
-
 #### For Arch Linux there's an [AUR package](https://aur.archlinux.org/packages/memavaild/)
 
 Use your favorite [AUR helper](https://wiki.archlinux.org/index.php/AUR_helpers). For example,
